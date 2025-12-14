@@ -1,28 +1,29 @@
 {
-  "name": "mmm-network-signal",
+  "name": "mmm-wifi",
   "version": "1.1.0",
-  "description": "MagicMirror2 solid network status",
-  "main": "MMM-network-signal.js",
+  "description": "MagicMirror² Wi-Fi status and on-device configuration",
+  "main": "MMM-WIFI.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/PoOwAa/MMM-network-signal.git"
+    "url": "git+https://github.com/pcheek13/MMM-WIFI.git"
   },
   "keywords": [
     "MMM",
     "MagicMirror",
-    "MagicMirror2",
-    "Network"
+    "MorningMirror",
+    "Network",
+    "WiFi"
   ],
-  "author": "PoOwAa",
+  "author": "pcheek13",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/PoOwAa/MMM-network-signal/issues"
+    "url": "https://github.com/pcheek13/MMM-WIFI/issues"
   },
-  "homepage": "https://github.com/PoOwAa/MMM-network-signal#readme",
+  "homepage": "https://github.com/pcheek13/MMM-WIFI#readme",
   "dependencies": {
-    "ping": "^0.4.0"
+    "ping": "^0.4.4"
   }
 }

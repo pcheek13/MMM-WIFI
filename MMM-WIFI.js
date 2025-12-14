@@ -1,0 +1,206 @@
+/**
+ * MagicMirror² (and MorningMirror forks)
+ * Module: MMM-WIFI
+ *
+ * By pcheek13 https://github.com/pcheek13/MMM-WIFI
+ * MIT Licensed.
+ */
+
+Module.register("MMM-WIFI", {
+    // Default module config
+    defaults: {
+        updateInterval: 1000 * 5, // check network every seconds
+        maxTimeout: 1000, // maximum timeout
+        animationSpeed: 1000 * 0.25, // fade effect
+        initialLoadDelay: 1000 * 3, // first check delay
+        server: "8.8.8.8", // Server to check network connection. Default 8.8.8.8 is a Google DNS server
+        showMessage: true,
+        thresholds: {
+            strong: 50,
+            medium: 150,
+            weak: 500,
+        },
+        flexDirection: 'row', // set to 'row' to display the row in left-to-right mode, 'row-reverse' to display the row in right-to-left mode
+        scale: 0.45, // scale for the icon, must be greater than 0
+        allowWifiUpdates: true,
+        wifiCommand: {
+            executable: "/bin/bash",
+            args: ["/home/pi/MagicMirror/modules/MMM-WIFI/scripts/update-wifi.sh", "{ssid}", "{password}"],
+            timeout: 20000,
+        },
+        useSudoForWifiCommand: true,
+    },
+    getTranslations: function() {
+        return {
+            en: "translations/en.json",
+        };
+    },
+
+    start: function() {
+        Log.info("Starting module: " + this.name);
+        const self = this;
+        this.ping = Number.MAX_SAFE_INTEGER;
+        this.wifiUpdateStatus = "";
+        this.formVisible = false;
+
+        setTimeout(() => {
+            self.pingTest();
+            setInterval(() => {
+                self.pingTest();
+            }, self.config.updateInterval); // Actual loop timing
+        }, self.config.initialLoadDelay); // First delay
+    },
+
+    getDom: function() {
+        const content = document.createElement("div");
+        content.style = `display: flex;flex-direction: ${this.config.flexDirection};justify-content: space-between; align-items: center; gap: 8px;`;
+        const wifiSign = document.createElement("img");
+        const pointerStyle = this.config.allowWifiUpdates ? "cursor: pointer;" : "";
+        wifiSign.style = `transform:scale(${this.config.scale}); ${pointerStyle}`;
+        if (this.config.showMessage)
+        {
+            var connStatus = document.createElement("p");
+            connStatus.style = "text-align:center;font-size:0.65em";
+        }
+
+        // Changing icon
+        switch (true) {
+            // Fast ping, strong signal
+            case this.ping < this.config.thresholds.strong:
+                wifiSign.src = this.file("icons/3.png");
+                if (this.config.showMessage)
+                {
+                    connStatus.innerHTML = this.translate("excellent")
+                }
+                break;
+            // Medium ping, medium signal
+            case this.ping < this.config.thresholds.medium:
+                wifiSign.src = this.file("icons/2.png");
+                if (this.config.showMessage)
+                {
+                    connStatus.innerHTML = this.translate("good")
+                }
+                break;
+            // Slow ping, weak signal
+            case this.ping < this.config.thresholds.weak:
+                wifiSign.src = this.file("icons/1.png");
+                if (this.config.showMessage)
+                {
+                    connStatus.innerHTML = this.translate("normal")
+                }
+                break;
+            // Ultraslow ping, better if "no signal"
+            case this.ping > this.config.thresholds.weak:
+                wifiSign.src = this.file("icons/0.png");
+                if (this.config.showMessage)
+                {
+                    connStatus.innerHTML = this.translate("bad")
+                }
+                break;
+            // No actual ping, maybe just searching for signal
+            default:
+                wifiSign.src = this.file("icons/loading.gif");
+                break;
+        }
+
+        if (this.config.showMessage)
+        {
+            content.appendChild(connStatus);
+        }
+        content.appendChild(wifiSign);
+
+        if (this.config.allowWifiUpdates) {
+            wifiSign.title = this.translate("configureWifiTitle");
+            wifiSign.addEventListener("click", () => {
+                this.formVisible = !this.formVisible;
+                this.updateDom(this.config.animationSpeed);
+            });
+
+            const formWrapper = document.createElement("div");
+            formWrapper.style = `display: ${this.formVisible ? "flex" : "none"}; flex-direction: column; gap: 4px; font-size: 0.65em; max-width: 220px;`;
+            const heading = document.createElement("div");
+            heading.style = "font-weight:bold";
+            heading.innerHTML = this.translate("configureWifiTitle");
+            formWrapper.appendChild(heading);
+
+            const description = document.createElement("div");
+            description.style = "line-height:1.3";
+            description.innerHTML = this.translate("configureWifiDescription");
+            formWrapper.appendChild(description);
+
+            const form = document.createElement("form");
+            form.style = "display:flex; flex-direction:column; gap:4px;";
+
+            const ssid = document.createElement("input");
+            ssid.type = "text";
+            ssid.placeholder = this.translate("ssidPlaceholder");
+            ssid.required = true;
+
+            const password = document.createElement("input");
+            password.type = "password";
+            password.placeholder = this.translate("passwordPlaceholder");
+            password.required = true;
+
+            const submit = document.createElement("button");
+            submit.type = "submit";
+            submit.innerHTML = this.translate("submitWifi");
+
+            form.appendChild(ssid);
+            form.appendChild(password);
+            form.appendChild(submit);
+
+            form.addEventListener("submit", event => {
+                event.preventDefault();
+                const trimmedSsid = ssid.value.trim();
+                const trimmedPassword = password.value.trim();
+                if (!trimmedSsid || !trimmedPassword) {
+                    this.wifiUpdateStatus = this.translate("wifiMissingFields");
+                    this.updateDom(this.config.animationSpeed);
+                    return;
+                }
+
+                this.wifiUpdateStatus = this.translate("wifiUpdatePending");
+                this.sendSocketNotification("MMM_WIFI_UPDATE_WIFI", {
+                    ssid: trimmedSsid,
+                    password: trimmedPassword,
+                    config: this.config,
+                });
+                this.updateDom(this.config.animationSpeed);
+            });
+
+            formWrapper.appendChild(form);
+
+            if (this.wifiUpdateStatus) {
+                const status = document.createElement("div");
+                status.style = "line-height:1.3";
+                status.textContent = this.wifiUpdateStatus;
+                formWrapper.appendChild(status);
+            }
+
+            content.appendChild(formWrapper);
+        }
+        return content;
+    },
+
+    // Send socket notification, to start pinging the server
+    pingTest: function() {
+        this.sendSocketNotification("MMM_WIFI_CHECK_SIGNAL", {
+            config: this.config,
+        });
+    },
+
+    // Handle socket answer
+    socketNotificationReceived: function(notification, payload) {
+        // Care only own socket answers
+        if (notification === "MMM_WIFI_RESULT_PING") {
+            this.ping = payload;
+            this.updateDom(this.config.animationSpeed);
+        } else if (notification === "MMM_WIFI_WIFI_UPDATE_STATUS") {
+            const message = payload && payload.messageKey ? this.translate(payload.messageKey) : "";
+            const detail = payload && payload.detail ? `: ${payload.detail}` : "";
+            this.wifiUpdateStatus = `${message}${detail}`;
+            this.formVisible = true;
+            this.updateDom(this.config.animationSpeed);
+        }
+    },
+});
