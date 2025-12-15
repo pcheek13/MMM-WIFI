@@ -47,6 +47,7 @@ Module.register("MMM-WIFI", {
         this.activeInput = null;
         this.keyboardVisible = false;
         this.keyboardShift = false;
+        this.formData = { ssid: "", password: "" };
 
         setTimeout(() => {
             self.pingTest();
@@ -59,15 +60,19 @@ Module.register("MMM-WIFI", {
     getDom: function() {
         const content = document.createElement("div");
         content.style = `display: flex;flex-direction: ${this.config.flexDirection};justify-content: space-between; align-items: center; gap: 8px;`;
+        content.style.pointerEvents = "auto";
         const pointerStyle = this.config.allowWifiUpdates ? "cursor: pointer;" : "";
 
         const wifiButton = document.createElement("button");
         wifiButton.type = "button";
+        wifiButton.tabIndex = 0;
+        wifiButton.setAttribute("aria-label", this.translate("configureWifiTitle"));
         wifiButton.style = `border:none;background:transparent;display:flex;align-items:center;justify-content:center;padding:10px;`
             + `width:${this.config.touchTargetSize}px;height:${this.config.touchTargetSize}px;`
-            + `border-radius:12px;${pointerStyle}touch-action:manipulation;`;
+            + `border-radius:12px;${pointerStyle}touch-action:manipulation;pointer-events:auto;user-select:none;`;
 
         const wifiSign = document.createElement("img");
+        wifiSign.draggable = false;
         wifiSign.style = `transform:scale(${this.config.scale});width:100%;height:100%;object-fit:contain;${pointerStyle}`;
         if (this.config.showMessage)
         {
@@ -124,9 +129,22 @@ Module.register("MMM-WIFI", {
 
         if (this.config.allowWifiUpdates) {
             wifiSign.title = this.translate("configureWifiTitle");
-            wifiButton.addEventListener("click", () => {
+            const toggleForm = event => {
+                if (event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
                 this.formVisible = !this.formVisible;
                 this.updateDom(this.config.animationSpeed);
+            };
+
+            ["click", "pointerdown", "pointerup", "touchend"].forEach(evt => {
+                wifiButton.addEventListener(evt, toggleForm, { passive: false });
+            });
+            wifiButton.addEventListener("keydown", event => {
+                if (event.code === "Space" || event.code === "Enter") {
+                    toggleForm(event);
+                }
             });
 
             const formWrapper = document.createElement("div");
@@ -148,11 +166,13 @@ Module.register("MMM-WIFI", {
             ssid.type = "text";
             ssid.placeholder = this.translate("ssidPlaceholder");
             ssid.required = true;
+            ssid.value = this.formData.ssid;
 
             const password = document.createElement("input");
             password.type = "password";
             password.placeholder = this.translate("passwordPlaceholder");
             password.required = true;
+            password.value = this.formData.password;
 
             const submit = document.createElement("button");
             submit.type = "submit";
@@ -180,6 +200,13 @@ Module.register("MMM-WIFI", {
                 password.addEventListener("focus", () => setActiveInput(password));
             }
 
+            ssid.addEventListener("input", () => {
+                this.formData.ssid = ssid.value;
+            });
+            password.addEventListener("input", () => {
+                this.formData.password = password.value;
+            });
+
             form.addEventListener("submit", event => {
                 event.preventDefault();
                 const trimmedSsid = ssid.value.trim();
@@ -189,6 +216,8 @@ Module.register("MMM-WIFI", {
                     this.updateDom(this.config.animationSpeed);
                     return;
                 }
+
+                this.formData = { ssid: trimmedSsid, password: trimmedPassword };
 
                 this.wifiUpdateStatus = this.translate("wifiUpdatePending");
                 this.sendSocketNotification("MMM_WIFI_UPDATE_WIFI", {
@@ -329,6 +358,9 @@ Module.register("MMM-WIFI", {
         // Care only own socket answers
         if (notification === "MMM_WIFI_RESULT_PING") {
             this.ping = payload;
+            if (this.formVisible && (this.activeInput || this.keyboardVisible)) {
+                return;
+            }
             this.updateDom(this.config.animationSpeed);
         } else if (notification === "MMM_WIFI_WIFI_UPDATE_STATUS") {
             const message = payload && payload.messageKey ? this.translate(payload.messageKey) : "";
