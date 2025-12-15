@@ -47,13 +47,15 @@ nano ~/MagicMirror/config/config.js # change nano to your favorite editor
 | `showMessage`      | `true`                                   | Shows status messages depending on how good or bad is the connection |
 | `flexDirection`    | `row`                                    | Sets the direction the module is displayed; `row` displays the row in left-to-right mode (default), `row-reverse` displays the row in right-to-left mode. |
 | `scale`            | `0.45`                                   | How much to scale the ping icon. Must be greater than 0. |
+| `touchTargetSize`  | `96`                                     | Minimum square size (px) of the tap target around the Wi‑Fi icon for easier touchscreen interaction. |
 | `allowWifiUpdates` | `true`                                   | When enabled, tapping the Wi‑Fi icon on a touchscreen toggles a form to enter a new SSID and password. |
+| `showVirtualKeyboard` | `true`                                | Displays a built-in on-screen keyboard beneath the form so you can type SSID and password without a hardware keyboard. |
 | `wifiCommand`      | `/bin/bash /home/pi/MagicMirror/modules/MMM-WIFI/scripts/update-wifi.sh {ssid} {password}` | Command executed to update Wi‑Fi (defaults to the provided shell script). Customize if your Pi uses a different path or interface name. |
 | `useSudoForWifiCommand` | `true`                              | Run the Wi‑Fi command with `sudo`. Disable only if your MagicMirror user already has permission to manage networking. |
 
 ### Updating Wi‑Fi from the mirror
 
-When `allowWifiUpdates` is true, simply tap the Wi‑Fi strength icon on your MagicMirror touchscreen. A small form appears where you can enter the target SSID and password. Submitting the form triggers the provided shell script (or your custom command) to append the new network to `/etc/wpa_supplicant/wpa_supplicant.conf`, reconfigure Wi‑Fi, and restart MagicMirror with `pm2 restart mm`. Any errors returned by the command will be shown under the form.
+When `allowWifiUpdates` is true, simply tap the enlarged Wi‑Fi strength icon on your MagicMirror touchscreen. A small form appears where you can enter the target SSID and password (with an on-screen keyboard if you don’t have a physical one). Submitting the form triggers the provided shell script (or your custom command) to append the new network to `/etc/wpa_supplicant/wpa_supplicant.conf`, reconfigure Wi‑Fi, and restart MagicMirror with `pm2 restart mm`. Any errors returned by the command will be shown under the form.
 
 ### Custom Wi‑Fi script (default)
 

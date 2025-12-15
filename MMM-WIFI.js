@@ -22,7 +22,9 @@ Module.register("MMM-WIFI", {
         },
         flexDirection: 'row', // set to 'row' to display the row in left-to-right mode, 'row-reverse' to display the row in right-to-left mode
         scale: 0.45, // scale for the icon, must be greater than 0
+        touchTargetSize: 96, // minimum square size (px) for the tap target around the Wi-Fi icon
         allowWifiUpdates: true,
+        showVirtualKeyboard: true, // show a simple on-screen keyboard for SSID/password input
         wifiCommand: {
             executable: "/bin/bash",
             args: ["/home/pi/MagicMirror/modules/MMM-WIFI/scripts/update-wifi.sh", "{ssid}", "{password}"],
@@ -42,6 +44,9 @@ Module.register("MMM-WIFI", {
         this.ping = Number.MAX_SAFE_INTEGER;
         this.wifiUpdateStatus = "";
         this.formVisible = false;
+        this.activeInput = null;
+        this.keyboardVisible = false;
+        this.keyboardShift = false;
 
         setTimeout(() => {
             self.pingTest();
@@ -54,9 +59,16 @@ Module.register("MMM-WIFI", {
     getDom: function() {
         const content = document.createElement("div");
         content.style = `display: flex;flex-direction: ${this.config.flexDirection};justify-content: space-between; align-items: center; gap: 8px;`;
-        const wifiSign = document.createElement("img");
         const pointerStyle = this.config.allowWifiUpdates ? "cursor: pointer;" : "";
-        wifiSign.style = `transform:scale(${this.config.scale}); ${pointerStyle}`;
+
+        const wifiButton = document.createElement("button");
+        wifiButton.type = "button";
+        wifiButton.style = `border:none;background:transparent;display:flex;align-items:center;justify-content:center;padding:10px;`
+            + `width:${this.config.touchTargetSize}px;height:${this.config.touchTargetSize}px;`
+            + `border-radius:12px;${pointerStyle}touch-action:manipulation;`;
+
+        const wifiSign = document.createElement("img");
+        wifiSign.style = `transform:scale(${this.config.scale});width:100%;height:100%;object-fit:contain;${pointerStyle}`;
         if (this.config.showMessage)
         {
             var connStatus = document.createElement("p");
@@ -107,11 +119,12 @@ Module.register("MMM-WIFI", {
         {
             content.appendChild(connStatus);
         }
-        content.appendChild(wifiSign);
+        wifiButton.appendChild(wifiSign);
+        content.appendChild(wifiButton);
 
         if (this.config.allowWifiUpdates) {
             wifiSign.title = this.translate("configureWifiTitle");
-            wifiSign.addEventListener("click", () => {
+            wifiButton.addEventListener("click", () => {
                 this.formVisible = !this.formVisible;
                 this.updateDom(this.config.animationSpeed);
             });
@@ -149,6 +162,24 @@ Module.register("MMM-WIFI", {
             form.appendChild(password);
             form.appendChild(submit);
 
+            const keyboardWrapper = document.createElement("div");
+            keyboardWrapper.style = `display:${this.keyboardVisible && this.config.showVirtualKeyboard ? "flex" : "none"};` +
+                "flex-direction:column; gap:4px; margin-top:4px; max-width:240px;";
+
+            const keyboardState = { shift: this.keyboardShift };
+            const setActiveInput = input => {
+                this.activeInput = input;
+                if (this.config.showVirtualKeyboard) {
+                    this.keyboardVisible = true;
+                    keyboardWrapper.style.display = "flex";
+                }
+            };
+
+            if (this.config.showVirtualKeyboard) {
+                ssid.addEventListener("focus", () => setActiveInput(ssid));
+                password.addEventListener("focus", () => setActiveInput(password));
+            }
+
             form.addEventListener("submit", event => {
                 event.preventDefault();
                 const trimmedSsid = ssid.value.trim();
@@ -169,6 +200,110 @@ Module.register("MMM-WIFI", {
             });
 
             formWrapper.appendChild(form);
+
+            if (this.config.showVirtualKeyboard) {
+                const keyboardRows = [
+                    ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "⌫"],
+                    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+                    ["a", "s", "d", "f", "g", "h", "j", "k", "l", "@"],
+                    ["⇧", "z", "x", "c", "v", "b", "n", "m", "-", "_"],
+                    ["space", "clear", "hide"],
+                ];
+
+                const keyButtons = [];
+                const insertAtCursor = char => {
+                    if (!this.activeInput) return;
+                    const start = this.activeInput.selectionStart || 0;
+                    const end = this.activeInput.selectionEnd || 0;
+                    const current = this.activeInput.value;
+                    this.activeInput.value = `${current.slice(0, start)}${char}${current.slice(end)}`;
+                    const cursor = start + char.length;
+                    this.activeInput.setSelectionRange(cursor, cursor);
+                    this.activeInput.focus();
+                };
+
+                const backspace = () => {
+                    if (!this.activeInput) return;
+                    const start = this.activeInput.selectionStart || 0;
+                    const end = this.activeInput.selectionEnd || 0;
+                    const current = this.activeInput.value;
+                    if (start === end && start > 0) {
+                        const nextPos = start - 1;
+                        this.activeInput.value = `${current.slice(0, start - 1)}${current.slice(end)}`;
+                        this.activeInput.setSelectionRange(nextPos, nextPos);
+                    } else if (start !== end) {
+                        this.activeInput.value = `${current.slice(0, start)}${current.slice(end)}`;
+                        this.activeInput.setSelectionRange(start, start);
+                    }
+                    this.activeInput.focus();
+                };
+
+                const refreshLabels = () => {
+                    keyButtons.forEach(({ button, key }) => {
+                        if (key === "space") {
+                            button.textContent = "Space";
+                        } else if (key === "clear") {
+                            button.textContent = "Clear";
+                        } else if (key === "hide") {
+                            button.textContent = "Hide";
+                        } else if (key === "⌫") {
+                            button.textContent = "⌫";
+                        } else if (key === "⇧") {
+                            button.textContent = keyboardState.shift ? "⇧ (on)" : "⇧";
+                        } else {
+                            button.textContent = keyboardState.shift ? key.toUpperCase() : key;
+                        }
+                    });
+                };
+
+                keyboardRows.forEach(row => {
+                    const rowEl = document.createElement("div");
+                    rowEl.style = "display:flex; gap:4px;";
+                    row.forEach(key => {
+                        const button = document.createElement("button");
+                        button.type = "button";
+                        button.style = "min-width:38px; padding:6px 8px; border-radius:6px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.08); color:inherit;";
+                        button.addEventListener("click", () => {
+                            if (!this.activeInput) {
+                                return;
+                            }
+                            if (key === "space") {
+                                insertAtCursor(" ");
+                                return;
+                            }
+                            if (key === "clear") {
+                                this.activeInput.value = "";
+                                this.activeInput.focus();
+                                return;
+                            }
+                            if (key === "hide") {
+                                this.keyboardVisible = false;
+                                keyboardWrapper.style.display = "none";
+                                this.activeInput = null;
+                                return;
+                            }
+                            if (key === "⌫") {
+                                backspace();
+                                return;
+                            }
+                            if (key === "⇧") {
+                                keyboardState.shift = !keyboardState.shift;
+                                this.keyboardShift = keyboardState.shift;
+                                refreshLabels();
+                                return;
+                            }
+                            const charToInsert = keyboardState.shift ? key.toUpperCase() : key;
+                            insertAtCursor(charToInsert);
+                        });
+                        keyButtons.push({ button, key });
+                        rowEl.appendChild(button);
+                    });
+                    keyboardWrapper.appendChild(rowEl);
+                });
+
+                refreshLabels();
+                formWrapper.appendChild(keyboardWrapper);
+            }
 
             if (this.wifiUpdateStatus) {
                 const status = document.createElement("div");
