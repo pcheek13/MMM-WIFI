@@ -65,7 +65,9 @@ This module ships with `scripts/update-wifi.sh`, which:
 - Uses `wpa_passphrase` to append a secure network block for your SSID/password
 - Reconfigures Wi‑Fi and restarts MagicMirror via `pm2 restart mm`
 
-If you prefer to recreate the script yourself, copy/paste the following on your Pi (adjust the path if you keep your module elsewhere):
+If you need to recreate or inspect the helper, follow these explicit steps on your Raspberry Pi (all commands are copy/paste ready):
+
+1. Move into the module folder and create the script file with the full contents:
 
 ```bash
 cd ~/MagicMirror/modules/MMM-WIFI
@@ -85,21 +87,40 @@ BACKUP_SUFFIX=$(date +%Y%m%d%H%M%S)
 BACKUP_PATH="${WPA_CONF}.${BACKUP_SUFFIX}.bak"
 TMP_NETWORK=$(mktemp)
 
+# Create a hashed network block from the provided credentials
 if ! command -v wpa_passphrase >/dev/null 2>&1; then
   echo "wpa_passphrase command not found. Please install wpa_supplicant." >&2
   exit 2
 fi
 
 wpa_passphrase "$SSID" "$PASSWORD" > "$TMP_NETWORK"
+
+# Backup existing configuration and append the new network block
 sudo cp "$WPA_CONF" "$BACKUP_PATH"
+
 echo "# Added by MMM-WIFI on $(date)" | sudo tee -a "$WPA_CONF" >/dev/null
 sudo tee -a "$WPA_CONF" < "$TMP_NETWORK" >/dev/null
+
 rm -f "$TMP_NETWORK"
+
+# Reconfigure Wi-Fi and restart MagicMirror
 sudo wpa_cli -i wlan0 reconfigure || sudo systemctl restart wpa_supplicant.service
 sudo pm2 restart mm
+
 echo "Wi-Fi credentials for '$SSID' applied. Backup saved to $BACKUP_PATH"
 EOF
+```
+
+2. Make it executable so MagicMirror can run it:
+
+```bash
 chmod +x scripts/update-wifi.sh
 ```
 
-Ensure `wifiCommand` in your module config points to this script (the default path assumes `/home/pi/MagicMirror/modules/MMM-WIFI/scripts/update-wifi.sh`).
+3. (Optional) Test the helper directly from the command line to confirm it updates your Pi’s Wi‑Fi before relying on the touchscreen form:
+
+```bash
+sudo /bin/bash /home/pi/MagicMirror/modules/MMM-WIFI/scripts/update-wifi.sh "YourSSID" "YourPassword"
+```
+
+4. Ensure `wifiCommand` in your `config.js` points to this script. The default already assumes `/home/pi/MagicMirror/modules/MMM-WIFI/scripts/update-wifi.sh` and runs it with `sudo` when `useSudoForWifiCommand` is `true`.
