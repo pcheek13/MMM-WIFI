@@ -42,6 +42,17 @@ rm -f "$TMP_NETWORK"
 
 # Reconfigure Wi-Fi and restart MagicMirror
 sudo wpa_cli -i wlan0 reconfigure || sudo systemctl restart wpa_supplicant.service
-sudo pm2 restart mm
+
+PM2_PROCESS_NAME=${PM2_PROCESS_NAME:-mm}
+if command -v pm2 >/dev/null 2>&1; then
+  if sudo pm2 describe "$PM2_PROCESS_NAME" >/dev/null 2>&1; then
+    sudo pm2 restart "$PM2_PROCESS_NAME" --update-env || \
+      echo "Warning: pm2 restart failed; restart MagicMirror manually" >&2
+  else
+    echo "Warning: pm2 process '$PM2_PROCESS_NAME' not found. Start MagicMirror with pm2 or set PM2_PROCESS_NAME." >&2
+  fi
+else
+  echo "Warning: pm2 not installed; restart MagicMirror manually after updating Wi-Fi." >&2
+fi
 
 echo "Wi-Fi credentials for '$SSID' applied. Backup saved to $BACKUP_PATH"

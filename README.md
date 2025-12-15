@@ -10,12 +10,13 @@ Display a solid Wi‑Fi logo as network signal for MagicMirror² (and MorningMir
 -   [NPM Ping](https://www.npmjs.com/package/ping)
 
 ## Installation (one copy/paste block)
-On your Pi, paste the following into the terminal to install the module and its dependencies:
+On your Pi, paste the following into the terminal to install the module, its dependencies, and ensure the bundled Wi‑Fi helper is executable:
 ```bash
 cd ~/MagicMirror/modules && \
 git clone https://github.com/pcheek13/MMM-WIFI.git && \
 cd MMM-WIFI && \
-npm install
+npm install && \
+chmod +x scripts/update-wifi.sh
 ```
 ## Configuration
 - Now use your editor `nano` or `vim` to edit the following file
@@ -55,7 +56,7 @@ nano ~/MagicMirror/config/config.js # change nano to your favorite editor
 
 ### Updating Wi‑Fi from the mirror
 
-When `allowWifiUpdates` is true, simply tap or click the enlarged Wi‑Fi strength icon (the whole padded square is clickable and also supports keyboard Enter/Space). The button is pointer-enabled from the moment the module loads, and the form will stay put while you type (inputs are preserved even as the signal status updates in the background). Submitting the form triggers the provided shell script (or your custom command) to append the new network to `/etc/wpa_supplicant/wpa_supplicant.conf`, reconfigure Wi‑Fi, and restart MagicMirror with `pm2 restart mm`. Any errors returned by the command will be shown under the form.
+When `allowWifiUpdates` is true, simply tap or click the enlarged Wi‑Fi strength icon (the whole padded square is clickable and also supports keyboard Enter/Space). The button is pointer-enabled from the moment the module loads, and the form will stay put while you type (inputs are preserved even as the signal status updates in the background). Submitting the form triggers the provided shell script (or your custom command) to append the new network to `/etc/wpa_supplicant/wpa_supplicant.conf`, reconfigure Wi‑Fi, and restart MagicMirror with pm2. Any errors returned by the command will be shown under the form.
 
 ### Custom Wi‑Fi script (default)
 
@@ -63,7 +64,7 @@ This module ships with `scripts/update-wifi.sh`, which:
 
 - Backs up `/etc/wpa_supplicant/wpa_supplicant.conf`
 - Uses `wpa_passphrase` to append a secure network block for your SSID/password
-- Reconfigures Wi‑Fi and restarts MagicMirror via `pm2 restart mm`
+- Reconfigures Wi‑Fi and restarts MagicMirror via pm2 (default process name `mm`; override with `PM2_PROCESS_NAME`)
 
 If you need to recreate or inspect the helper, follow these explicit steps on your Raspberry Pi (all commands are copy/paste ready):
 
@@ -116,7 +117,18 @@ rm -f "$TMP_NETWORK"
 
 # Reconfigure Wi-Fi and restart MagicMirror
 sudo wpa_cli -i wlan0 reconfigure || sudo systemctl restart wpa_supplicant.service
-sudo pm2 restart mm
+
+PM2_PROCESS_NAME=${PM2_PROCESS_NAME:-mm}
+if command -v pm2 >/dev/null 2>&1; then
+  if sudo pm2 describe "$PM2_PROCESS_NAME" >/dev/null 2>&1; then
+    sudo pm2 restart "$PM2_PROCESS_NAME" --update-env || \\
+      echo "Warning: pm2 restart failed; restart MagicMirror manually" >&2
+  else
+    echo "Warning: pm2 process '$PM2_PROCESS_NAME' not found. Start MagicMirror with pm2 or set PM2_PROCESS_NAME." >&2
+  fi
+else
+  echo "Warning: pm2 not installed; restart MagicMirror manually after updating Wi-Fi." >&2
+fi
 
 echo "Wi-Fi credentials for '$SSID' applied. Backup saved to $BACKUP_PATH"
 EOF
@@ -148,3 +160,17 @@ sudo /bin/bash /home/pi/MagicMirror/modules/MMM-WIFI/scripts/update-wifi.sh "You
 > country=US
 > CFG
 > ```
+
+> **Troubleshooting pm2 errors (`process or namespace mm not found` / `Use --update-env to update environment variables`)**
+>
+> The helper restarts MagicMirror with pm2 using the process name in `PM2_PROCESS_NAME` (defaults to `mm`). If you see either er
+> ror above, ensure MagicMirror is running under pm2 and named correctly:
+>
+> ```bash
+> pm2 list                      # confirm the process name
+> pm2 start mm.sh --name mm     # or use your existing start command/name
+> export PM2_PROCESS_NAME=mm    # set to your process name if different
+> ```
+>
+> The script already uses `--update-env` during restart; the error simply means pm2 could not find a process with the expected n
+> ame. Set the name, export `PM2_PROCESS_NAME`, and rerun the Wi‑Fi update.
