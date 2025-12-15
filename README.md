@@ -87,6 +87,17 @@ BACKUP_SUFFIX=$(date +%Y%m%d%H%M%S)
 BACKUP_PATH="${WPA_CONF}.${BACKUP_SUFFIX}.bak"
 TMP_NETWORK=$(mktemp)
 
+# Ensure the configuration file exists and is writable
+sudo install -d -m 755 /etc/wpa_supplicant
+if [[ ! -f "$WPA_CONF" ]]; then
+  echo "Creating missing $WPA_CONF with defaults"
+  sudo tee "$WPA_CONF" >/dev/null <<'CFG'
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+country=US
+CFG
+fi
+
 # Create a hashed network block from the provided credentials
 if ! command -v wpa_passphrase >/dev/null 2>&1; then
   echo "wpa_passphrase command not found. Please install wpa_supplicant." >&2
@@ -124,3 +135,16 @@ sudo /bin/bash /home/pi/MagicMirror/modules/MMM-WIFI/scripts/update-wifi.sh "You
 ```
 
 4. Ensure `wifiCommand` in your `config.js` points to this script. The default already assumes `/home/pi/MagicMirror/modules/MMM-WIFI/scripts/update-wifi.sh` and runs it with `sudo` when `useSudoForWifiCommand` is `true`.
+
+> **Troubleshooting `cp: cannot stat '/etc/wpa_supplicant/wpa_supplicant.conf'`**
+>
+> If your Pi shows this error, the configuration file has never been created. The updated helper above now creates `/etc/wpa_supplicant/wpa_supplicant.conf` with safe defaults before backing it up and appending your network, so rerunning the command should succeed. If you prefer to prepare it manually, run:
+>
+> ```bash
+> sudo install -d -m 755 /etc/wpa_supplicant
+> sudo tee /etc/wpa_supplicant/wpa_supplicant.conf >/dev/null <<'CFG'
+> ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+> update_config=1
+> country=US
+> CFG
+> ```

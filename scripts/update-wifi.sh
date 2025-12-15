@@ -13,6 +13,17 @@ BACKUP_SUFFIX=$(date +%Y%m%d%H%M%S)
 BACKUP_PATH="${WPA_CONF}.${BACKUP_SUFFIX}.bak"
 TMP_NETWORK=$(mktemp)
 
+# Ensure the configuration file exists and is writable
+sudo install -d -m 755 /etc/wpa_supplicant
+if [[ ! -f "$WPA_CONF" ]]; then
+  echo "Creating missing $WPA_CONF with defaults"
+  sudo tee "$WPA_CONF" >/dev/null <<'CFG'
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+country=US
+CFG
+fi
+
 # Create a hashed network block from the provided credentials
 if ! command -v wpa_passphrase >/dev/null 2>&1; then
   echo "wpa_passphrase command not found. Please install wpa_supplicant." >&2
